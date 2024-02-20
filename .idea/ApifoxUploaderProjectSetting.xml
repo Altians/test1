@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ApifoxUploaderProjectSetting">
+    <option name="apifoxAccessToken" value="APS-7R9zjQUGUrmgkSSA0Za8dWQQguuwD8Ud" />
+    <option name="apifoxApiOverwriteMode" value="智能合并" />
+    <option name="apifoxProjectIds">
+      <array>
+        <option value="# ModuleName:ProjectID" />
+        <option value="tailg-microservice-app:3006707" />
+        <option value="App-do:3006707" />
+      </array>
+    </option>
+    <option name="yapiTokens" value="" />
+  </component>
+</project>

@@ -1,0 +1,226 @@
+package com.example.appdo.utils;
+
+import net.coobird.thumbnailator.Thumbnails;
+import org.apache.tomcat.util.codec.binary.Base64;
+import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.FrameGrabber;
+import org.bytedeco.javacv.Java2DFrameConverter;
+import org.springframework.util.Base64Utils;
+import org.springframework.web.multipart.MultipartFile;
+import sun.misc.BASE64Decoder;
+import sun.misc.BASE64Encoder;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
+public class VideoUtils implements MultipartFile{
+
+    private final byte[] imgContent;
+    private final String header;
+    /**
+     * 例子
+     * @param args
+     */
+    public static void main(String[] args) {
+//        String s = fetchFrame("https://dev-vedio-1303824005.cos.ap-beijing.myqcloud.com/video/51346c41-0ca0-4e74-9d50-b5393ba55535.mp4");
+        String s = fetchFrame("https://douyin-xjy.oss-cn-hangzhou.aliyuncs.com/douyin-xjy/hecheng/2023/04/18/fe5bc62a0b6e4500b1d2ad60541222f9.mp4");
+        System.out.println(s);
+//        System.out.println(base64ToMultipart(s));
+    }
+
+    public VideoUtils(byte[] imgContent, String header) {
+        this.imgContent = imgContent;
+        this.header = header;
+    }
+
+    public static String fetchFrame(String videoPath) {
+        FFmpegFrameGrabber ff = null;
+        byte[] data = null;
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        try {
+            ff = new FFmpegFrameGrabber(videoPath);
+            ff.start();
+            int lenght = ff.getLengthInFrames();
+            int i = 0;
+            Frame f = null;
+            while (i < lenght) {
+                // 过滤前几帧，避免出现全黑的图片
+                f = ff.grabFrame();
+                if ((i > 1) && (f.image != null)) {
+                    break;
+                }
+                i++;
+            }
+            BufferedImage bi =  new Java2DFrameConverter().getBufferedImage(f);
+            String rotate = ff.getVideoMetadata("rotate");
+            if (rotate != null) {
+                bi = rotate(bi, Integer.parseInt(rotate));
+            }
+            ImageIO.write(bi, "jpg", os);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (ff != null) {
+                    ff.stop();
+                }
+            } catch (FrameGrabber.Exception e) {
+                e.printStackTrace();
+            }
+        }
+        BASE64Encoder encoder = new BASE64Encoder();
+        String encode = Base64Utils.encodeToString(os.toByteArray());
+        String imageTo70K = resizeImageTo70K(encode);
+        System.out.println(encode.length()+"长度");
+        System.out.println(imageTo70K.length()+"长度");
+        return "data:image/jpg;base64,"+imageTo70K;
+    }
+
+    public static BufferedImage rotate(BufferedImage src, int angel) {
+        int src_width = src.getWidth(null);
+        int src_height = src.getHeight(null);
+        int type = src.getColorModel().getTransparency();
+        Rectangle rect_des = calcRotatedSize(new Rectangle(new Dimension(src_width, src_height)), angel);
+        BufferedImage bi = new BufferedImage(rect_des.width, rect_des.height, type);
+        Graphics2D g2 = bi.createGraphics();
+        g2.translate((rect_des.width - src_width) / 2, (rect_des.height - src_height) / 2);
+        g2.rotate(Math.toRadians(angel), src_width / 2, src_height / 2);
+        g2.drawImage(src, 0, 0, null);
+        g2.dispose();
+        return bi;
+    }
+
+    public static Rectangle calcRotatedSize(Rectangle src, int angel) {
+        if (angel >= 90) {
+            if(angel / 90 % 2 == 1) {
+                int temp = src.height;
+                src.height = src.width;
+                src.width = temp;
+            }
+            angel = angel % 90;
+        }
+        double r = Math.sqrt(src.height * src.height + src.width * src.width) / 2;
+        double len = 2 * Math.sin(Math.toRadians(angel) / 2) * r;
+        double angel_alpha = (Math.PI - Math.toRadians(angel)) / 2;
+        double angel_dalta_width = Math.atan((double) src.height / src.width);
+        double angel_dalta_height = Math.atan((double) src.width / src.height);
+        int len_dalta_width = (int) (len * Math.cos(Math.PI - angel_alpha - angel_dalta_width));
+        int len_dalta_height = (int) (len * Math.cos(Math.PI - angel_alpha - angel_dalta_height));
+        int des_width = src.width + len_dalta_width * 2;
+        int des_height = src.height + len_dalta_height * 2;
+        return new Rectangle(new Dimension(des_width, des_height));
+    }
+
+    /**
+     * 将base64转换成MultipartFile
+     * @param base64
+     * @return
+     */
+    public static MultipartFile base64ToMultipart(String base64) {
+        try {
+            String[] baseStrs = base64.split(",");
+
+            BASE64Decoder decoder = new BASE64Decoder();
+            byte[] b = new byte[0];
+            b = decoder.decodeBuffer(baseStrs[1]);
+
+            for(int i = 0; i < b.length; ++i) {
+                if (b[i] < 0) {
+                    b[i] += 256;
+                }
+            }
+            return new VideoUtils(b, baseStrs[0]);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+
+    @Override
+    public String getName() {
+        // TODO - implementation depends on your requirements
+        return System.currentTimeMillis() + Math.random() + "." + header.split("/")[1];
+    }
+
+    @Override
+    public String getOriginalFilename() {
+        // TODO - implementation depends on your requirements
+        return System.currentTimeMillis() + (int)Math.random() * 10000 + "." + header.split("/")[1];
+    }
+
+    @Override
+    public String getContentType() {
+        // TODO - implementation depends on your requirements
+        return header.split(":")[1];
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return imgContent == null || imgContent.length == 0;
+    }
+
+    @Override
+    public long getSize() {
+        return imgContent.length;
+    }
+
+    @Override
+    public byte[] getBytes() throws IOException {
+        return imgContent;
+    }
+
+    @Override
+    public InputStream getInputStream() throws IOException {
+        return new ByteArrayInputStream(imgContent);
+    }
+
+    @Override
+    public void transferTo(File dest) throws IOException, IllegalStateException {
+        new FileOutputStream(dest).write(imgContent);
+    }
+
+
+
+    /**
+     * 压缩base64编码至70k以内
+     *
+     * @param base64Img
+     * @return
+     */
+    public static String resizeImageTo70K(String base64Img) {
+        try {
+            BASE64Decoder decoder = new BASE64Decoder();
+            byte[] bytes1 = decoder.decodeBuffer(base64Img);
+            InputStream stream = new ByteArrayInputStream(bytes1);
+            BufferedImage src = ImageIO.read(stream);
+
+            BufferedImage output = Thumbnails.of(src).size(1000, 600).asBufferedImage();
+            String base64 = imageToBase64(output);
+            if (base64.length() - base64.length() / 8 * 2 > 70000) {
+                output = Thumbnails.of(output).scale(1 / (base64.length() / 70000)).asBufferedImage();
+                base64 = imageToBase64(output);
+            }
+            return base64;
+        } catch (Exception e) {
+            return base64Img;
+        }
+    }
+
+    /**
+     * BufferedImage转换成base64，在这里需要设置图片格式,因为我需要jpg格式就设置了jpg
+     */
+    public static String imageToBase64(BufferedImage bufferedImage) {
+        Base64 encoder = new Base64();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(bufferedImage, "jpg", baos);
+        } catch (IOException e) {
+        }
+        return new String(encoder.encode((baos.toByteArray())));
+    }
+
+
+}
