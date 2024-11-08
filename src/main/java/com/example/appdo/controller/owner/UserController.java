@@ -36,4 +36,10 @@ public class UserController {
     public void getUserInfo(@RequestBody List<Long> ids){
         System.out.println(ids);
     }
+
+    @GetMapping("/test1")
+    public void getUser(){
+        System.out.println("success");
+    }
+
 }
