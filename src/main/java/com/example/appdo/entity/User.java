@@ -2,16 +2,22 @@ package com.example.appdo.entity;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.experimental.Accessors;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
+import java.util.List;
 
+/**
+ * @Author: crh
+ * @CreateDate: 2024/5/28
+ * @Description:
+ */
 @Data
-@Builder
-@Accessors(chain = true)
 public class User implements Serializable {
-    public String name;
+    private String name;
 
-    public String userId;
-    public int age;
+    private String userId;
+    private Integer age;
+
+
 }

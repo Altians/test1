@@ -1,26 +1,17 @@
 package com.example.appdo;
 
-import cn.hutool.json.JSONUtil;
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.baomidou.mybatisplus.core.toolkit.IdWorker;
-import com.example.appdo.entity.CustDataDto;
+import com.example.appdo.entity.Demo;
+import com.example.appdo.entity.MyRunnable;
 import com.example.appdo.entity.User;
-import com.example.appdo.entity.UserInfo;
-import org.bytedeco.javacv.FFmpegFrameGrabber;
-import org.bytedeco.javacv.Java2DFrameConverter;
+import com.example.appdo.utils.RedisIdWorker;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.text.DateFormat;
+import java.security.NoSuchAlgorithmException;
+import java.sql.SQLOutput;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -29,136 +20,179 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @SpringBootTest
 class AppDoApplicationTests {
 
     @Test
-    void contextLoads() throws ParseException {
-        Map<String, Integer> map = new HashMap<>();
-        map.put("apple", 1);
-        map.put("banana", 2);
-//        map.computeIfAbsent("apple1", k -> 6);
-        map.computeIfPresent("apple",(k,v)-> v + 3);
-        System.out.println(map);
+    void contextLoads() {
 
-        for (int i = 0; i < 10; i++) {
-            map.put("banana", 2);
+        DecimalFormat decimalFormat = new DecimalFormat("0000");  //代表四位数
+        String maxSerialNumber = decimalFormat.format(Integer.valueOf("0201") + 1);  //转为String之后的结果是0002而不是2
+        System.out.println(maxSerialNumber);
+        System.out.println(Integer.valueOf("0201"));
+    }
+
+    public static void main(String[] args) {
+        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        // CountDownLatch减数机制,countDown触发await,达到同时执行的目的
+        CountDownLatch latch = new CountDownLatch(1);
+
+        List<String> threadNameList = Arrays.asList("A", "B", "C");
+        for (int i = 0; i < 3; i++) {
+            executorService.execute(new MyRunnable(threadNameList.get(i), latch));
         }
+
+        latch.countDown();
+        executorService.shutdown();
+        while (!executorService.isTerminated()) {
+            // 等待所有线程执行完成
+        }
+        System.exit(0);
+    }
+    @Test
+    void test4(){
+        List<Demo> result = new ArrayList<>();
+        Demo demo = new Demo();
+        List<User> list = new ArrayList<>();
+        User user = new User();
+        user.setName("1");
+        User user1 = new User();
+        user1.setName("你卡省的");
+        list.add(user);
+        list.add(user1);
+        demo.setUsers(list);
+        result.add(demo);
+
+//        List<User> collect = result.stream().flatMap(Collection::stream).collect(Collectors.toList());
+        List<User> collect = result.stream().flatMap(pjSubmitCartReq -> pjSubmitCartReq.getUsers().stream()).collect(Collectors.toList());
+        System.out.println(collect);
+
+    }
+
+    /**
+     * 自增序号
+     * @throws NoSuchAlgorithmException
+     */
+    @Test
+    void test12() throws NoSuchAlgorithmException {
+        AtomicInteger atomicInteger = new AtomicInteger(0);
+        List<User> list = new ArrayList<>();
+        User user = new User();
+        user.setName("小米");
+        user.setAge(10);
+        User user1 = new User();
+        user1.setName("小米");
+        user1.setAge(12);
+
+        User user2 = new User();
+        user2.setAge(14);
+        user2.setName("你的");
+        User user3 = new User();
+        user3.setAge(18);
+        user3.setName("你的");
+
+        User user4 = new User();
+        user4.setName("小华");
+        user4.setAge(30);
+
+        list.add(user4);
+        list.add(user);
+        list.add(user1);
+        list.add(user2);
+        list.add(user3);
+        //有序
+        Map<String, List<User>> map = list.stream().collect(Collectors.groupingBy(User::getName, LinkedHashMap::new, Collectors.toList()));
+        Map<String, List<User>> map1 = list.stream().collect(Collectors.groupingBy(User::getName));
+        for (Map.Entry<String, List<User>> entry : map.entrySet()) {
+            List<User> value = entry.getValue();
+            List<User> newList = value.stream().peek(ur -> ur.setAge(atomicInteger.incrementAndGet())).collect(Collectors.toList());
+            System.out.println(newList);
+        }
+
+//        List<User> collect = list.stream().peek(u -> u.setAge(atomicInteger.incrementAndGet())).collect(Collectors.toList());
+        System.out.println(map1);
+    }
+
+    @Autowired
+    private RedisIdWorker redisIdWorker;
+
+    /**
+     * 关于countdownlatch
+     *
+     * countdownlatch名为信号枪：主要的作用是同步协调在多线程的等待于唤醒问题
+     *
+     * 我们如果没有CountDownLatch ，那么由于程序是异步的，当异步程序没有执行完时，主线程就已经执行完了，然后我们期望的是分线程全部走完之后，主线程再走，所以我们此时需要使用到CountDownLatch
+     *
+     * CountDownLatch 中有两个最重要的方法
+     *
+     * 1、countDown
+     *
+     * 2、await
+     *
+     * await 方法 是阻塞方法，我们担心分线程没有执行完时，main线程就先执行，所以使用await可以让main线程阻塞，那么什么时候main线程不再阻塞呢？当CountDownLatch 内部维护的 变量变为0时，就不再阻塞，直接放行，那么什么时候CountDownLatch 维护的变量变为0 呢，我们只需要调用一次countDown ，内部变量就减少1，我们让分线程和变量绑定， 执行完一个分线程就减少一个变量，当分线程全部走完，CountDownLatch 维护的变量就是0，此时await就不再阻塞，统计出来的时间也就是所有分线程执行完后的时间。
+     *
+     * @throws InterruptedException
+     */
+    @Test
+    void test10() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(300);
+        Runnable task = () -> {
+            for (int i = 0; i < 1; i++) {
+                long id = redisIdWorker.nextId("order");
+                System.out.println("id = " + id);
+            }
+            latch.countDown();
+        };
+        ExecutorService es = Executors.newFixedThreadPool(100); //线程池，把任务提交，然后分配任务
+        long begin = System.currentTimeMillis();
+        for (int i = 0; i < 300; i++) {
+            es.submit(task);
+        }
+        latch.await();
+        long end = System.currentTimeMillis();
+        System.out.println("time = " + (end - begin));
     }
 
     @Test
-    void test12(){
-        int page = 1;
-        List<Map<String,Integer>> lista = new ArrayList<>();
-        List<Map<String,String>> model = new ArrayList<>();
-        /*
-        List<Map<String,Integer>> list = new ArrayList<>();
-        while (true){
-            if (page < 3){
-                Map<String,Integer> map1 = new HashMap<>();
-                map1.put("page",page);
-                list.add(map1);
-                System.out.println("第几次："+page);
-            }else {
-                break;
-            }
-            page++;
+    void test20(){
+        HashMap<Object, Object> map = new HashMap<>();
+        for (Map.Entry<Object, Object> entry : map.entrySet()) {
+            System.out.println(entry.getKey() + ":" + entry.getValue());
         }
-
-        Map<String, Integer> result = list.stream()
-                .flatMap(map -> map.entrySet().stream())
-                .collect(Collectors.groupingBy(Map.Entry::getKey, Collectors.summingInt(Map.Entry::getValue)));
-        for (Map.Entry<String, Integer> entry : result.entrySet()) {
-            System.out.println(entry.getKey()+entry.getValue());
-        }*/
-        List<String> list = Arrays.asList("1", "2", "3");
-        JSONArray data = new JSONArray();
-        CustDataDto dto = new CustDataDto();
-        dto.setCUST_NO("1");
-        dto.setQTY(11);
-        dto.setITEM_TYPE(1);
-        dto.setMODEL("TY1");
-        CustDataDto dto1 = new CustDataDto();
-        dto1.setCUST_NO("2");
-        dto1.setQTY(12);
-        dto1.setITEM_TYPE(1);
-        dto1.setMODEL("TY2");
-        CustDataDto dto2 = new CustDataDto();
-        dto2.setCUST_NO("3");
-        dto2.setQTY(13);
-        dto2.setITEM_TYPE(1);
-        dto2.setMODEL("TY3");
-        CustDataDto dto3 = new CustDataDto();
-        dto3.setCUST_NO("4");
-        dto3.setQTY(14);
-        dto3.setITEM_TYPE(1);
-        dto3.setMODEL("TY4");
-
-        CustDataDto dto5 = new CustDataDto();
-        dto5.setCUST_NO("1");
-        dto5.setQTY(20);
-        dto5.setITEM_TYPE(1);
-        dto5.setMODEL("TY4");
-
-        data.add(dto);
-        data.add(dto1);
-        data.add(dto2);
-        data.add(dto3);
-        data.add(dto5);
-
-        List<CustDataDto> dtos = new ArrayList<>();
-        while (true){
-            if (page < 3){
-                if (data != null){
-
-                    //经销商月实际量
-                    Map<String,Integer> custRealNumMap = new HashMap<>();
-                    for (String custCode : list) {
-                        //实际车型
-                        Set<String> oneVehicleRealNum = new HashSet<>();
-                        Map<String,String> modelMap = new HashMap<>();
-                        int oneCustRealNum = 0;
-                        for (int i = 0; i < data.size(); i++) {
-                            //成车数据
-                            if (1 == data.getJSONObject(i).getInteger("ITEM_TYPE") && custCode.equals(data.getJSONObject(i).getString("CUST_NO"))){
-                                oneCustRealNum += data.getJSONObject(i).getInteger("QTY");
-//                                oneVehicleRealNum.add(data.getJSONObject(i).getString("MODEL"));//经销商整月的实际车型
-//                                modelMap.put(data.getJSONObject(i).getString("MODEL"),custCode);
-                                CustDataDto dataDto = new CustDataDto();
-                                dataDto.setCUST_NO(custCode);
-                                dataDto.setMODEL(data.getJSONObject(i).getString("MODEL"));
-                                dtos.add(dataDto);
-                            }
-                        }
-                        custRealNumMap.put(custCode,oneCustRealNum);
-//                        custRealNumMap.put("realVehicleNum",oneVehicleRealNum.size());
-//                        model.add(modelMap);
-                    }
-                    lista.add(custRealNumMap);
-                }
-            }else {
-                break;
-            }
-            page++;
-        }
-
-//        System.out.println("所有的车型:"+JSON.toJSONString(dtos));
-        List<CustDataDto> collect = dtos.stream().distinct().collect(Collectors.toList());
-        System.out.println("去除重复对象后的数据："+JSON.toJSONString(collect));
-        Map<String, List<CustDataDto>> listMap = collect.stream().collect(Collectors.groupingBy(CustDataDto::getCUST_NO));
-        System.out.println("分组后的数据"+listMap);
-        //计算
-        Map<String, Integer> result = lista.stream()
-                .flatMap(map -> map.entrySet().stream())
-                .collect(Collectors.groupingBy(Map.Entry::getKey, Collectors.summingInt(Map.Entry::getValue)));
-        for (Map.Entry<String, Integer> entry : result.entrySet()) {
-            System.out.println(entry.getKey()+":"+entry.getValue());
-        }
+//        System.out.println(collect);
     }
+    @Test
+    void test13() {
+        List<User> saleBomList = new ArrayList<>();
+        List<User> downs = new ArrayList<>();
+        User user = new User();
+        user.setName("11");
+        user.setAge(21);
+        User user1 = new User();
+        user1.setName("11");
+        user1.setAge(21);
+        User user2 = new User();
+        user2.setName("12");
+        user2.setAge(22);
+
+        User user3 = new User();
+        user3.setName("12");
+        user3.setAge(22);
+        saleBomList.add(user);
+        saleBomList.add(user1);
+        saleBomList.add(user2);
+        downs.add(user3);
+
+        saleBomList.forEach(ur -> ur.setAge(120));
+        System.out.println(saleBomList);
+    }
+
     @Test
     void test11() throws UnsupportedEncodingException {
         String areaCode = "1,2,3,4,5";
@@ -266,27 +300,7 @@ class AppDoApplicationTests {
 
     @Test
     void test2(){
-        ArrayList<User> list = new ArrayList<>();
-        User user1 = User.builder().userId("100").name("小花").age(10).build();
-        User user2 = User.builder().userId("101").name("小ming").age(16).build();
-        User user3 = User.builder().userId("102").name("航航").age(19).build();
-        User user4 = User.builder().userId("103").name("航2航").age(19).build();
-        User user5 = User.builder().userId("105").name("航3航").age(19).build();
-        User user6 = User.builder().userId("106").name("航4航").age(19).build();
-        list.add(user1);
-        list.add(user2);
-//        list.add(user3);
-//        list.add(user4);
-//        list.add(user5);
-//        list.add(user6);
-        System.out.println(JSON.toJSONString(list));
-//        //list集合对象转map
-//        Map<String, User> map = list.stream().collect(Collectors.toMap(User::getUserId, Function.identity()));
-//        System.out.println(JSON.toJSONString(map));
-//        //打乱顺序随机选取几个元素
-//        Collections.shuffle(list);
-//        List<User> users = list.subList(0, 5);
-//        System.out.println(users);
+
     }
     @Test
     void test3() throws UnsupportedEncodingException {
