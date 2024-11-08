@@ -42,4 +42,9 @@ public class UserController {
         System.out.println("success");
     }
 
+    @GetMapping("/test12")
+    public void getUser1(){
+        System.out.println("success");
+    }
+
 }
